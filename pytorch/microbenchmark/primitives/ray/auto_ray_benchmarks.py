@@ -25,7 +25,7 @@ def test_with_mean_std(repeat_times,
                        backend='gpu'):
     results = []
     for i in range(repeat_times):
-        print('Test case {}......'.format(i))
+        print(f'Test case {i}......')
         test_case = ray_benchmarks.__dict__[test_name]
         duration = test_case(world_size, object_size, backend)
         results.append(duration)
@@ -35,7 +35,7 @@ def test_with_mean_std(repeat_times,
 
 if __name__ == "__main__":
     ray.init(num_cpus=4, num_gpus=2)
-    test_name = 'ray_' + args.test_name
+    test_name = f'ray_{args.test_name}'
     assert test_name in ray_benchmarks.__dict__ or args.test_name == 'auto'
     if args.test_name != 'auto':
         assert args.world_size is not None and args.object_size is not None
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         assert args.world_size is None and args.object_size is None
         backends = ['gpu', 'cpu']
         for backend in backends:
-            write_to = 'ray-microbenchmark-' + backend + '.csv'
+            write_to = f'ray-microbenchmark-{backend}.csv'
             with open(write_to, "w") as f:
                 algorithms = ['ray_broadcast', 'ray_gather', 'ray_reduce', 'ray_allreduce', 'ray_allgather', 'ray_sendrecv']
                 # algorithms = ['ray_sendrecv']

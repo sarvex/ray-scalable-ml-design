@@ -50,8 +50,7 @@ class CupyBenchmarkWorker:
                             1,
                             cp.cuda.Stream.null.ptr)
         cp.cuda.Stream.null.synchronize()
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def destroy(self):
         self.comm.destroy()

@@ -60,7 +60,7 @@ class ProgressMeter(object):
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
-        return '[' + fmt + '/' + fmt.format(num_batches) + ']'
+        return f'[{fmt}/{fmt.format(num_batches)}]'
 
 
 def main():
@@ -78,7 +78,9 @@ def main():
     print("Parameter server running...")
 
     batch_time = AverageMeter('Time', ':6.3f')
-    loss_meters = [AverageMeter('Loss{}'.format(i), ':.4e') for i in range(args.num_workers)]
+    loss_meters = [
+        AverageMeter(f'Loss{i}', ':.4e') for i in range(args.num_workers)
+    ]
     progress = ProgressMeter(
         args.num_iterations,
         [batch_time] + loss_meters)

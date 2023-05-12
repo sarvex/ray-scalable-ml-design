@@ -79,14 +79,16 @@ def init_collective_group(backend,
                           rank=-1):
     # do some check on the validaty of the arguments.
     # see: https://github.com/pytorch/pytorch/blob/master/torch/distributed/distributed_c10d.py
-    if backend == 'mpi':
-        if not mpi_available():
-            raise RuntimeError()
+    if (
+        backend == 'mpi'
+        and not mpi_available()
+        or backend != 'mpi'
+        and backend == 'nccl'
+        and not nccl_available()
+    ):
+        raise RuntimeError()
+    elif backend == 'mpi' and mpi_available():
         raise NotImplementedError()
-    elif backend == 'nccl':
-        if not nccl_available():
-            raise RuntimeError()
-
     global _group_mgr
     _group_mgr.create_collective_group(group_name, world_size, rank)
 

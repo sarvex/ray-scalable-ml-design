@@ -21,7 +21,7 @@ class Worker(object):
         # torch.manual_seed(0)
         # np.random.seed(0)
         self.model_type = model
-        print("=> creating model '{}'".format(model))
+        print(f"=> creating model '{model}'")
         self.model = torchmodels.__dict__[model]().cuda()
         self.criterion = nn.CrossEntropyLoss().cuda()
         self.batch_size = batch_size
@@ -31,11 +31,8 @@ class Worker(object):
         return len(self.get_weights())
 
     def params_distribution(self):
-        distribution = []
         weights = self.get_weights()
-        for k, v in weights.items():
-            distribution.append(v.numel())
-        return distribution
+        return [v.numel() for k, v in weights.items()]
 
     def get_data_loader(self, batch_size):
         # We add FileLock here because multiple workers will want to
@@ -71,7 +68,7 @@ class Worker(object):
         # assuming messages are gradients or parameters
         # this grad is ready to be called by apply_gradients in ParameterServer
         num_shards = np.unique(np.array(assignments)).size
-        shards = [dict() for i in range(num_shards)]
+        shards = [{} for _ in range(num_shards)]
         for i, (k, v) in enumerate(grad.items()):
             shards[assignments[i]][k] = v
         return shards
@@ -79,7 +76,7 @@ class Worker(object):
     def split_parameters(self, assignments):
         params = self.get_weights()
         num_shards = np.unique(np.array(assignments)).size
-        shards = [dict() for i in range(num_shards)]
+        shards = [{} for _ in range(num_shards)]
         for i, (k, v) in enumerate(params.items()):
             shards[assignments[i]][k] = v.data.cpu()  # this will only be used by ps which locates on cpus
             # shards[assignments[i]][k] = v  # this will only be used by ps which locates on cpus
@@ -90,7 +87,7 @@ class Worker(object):
 
     def stitch_parameters(self, *split_params):
         # need to construct a weight dict
-        params = dict()
+        params = {}
         for p in split_params:
             for k, v in p.items():
                 params[k] = v
@@ -103,10 +100,7 @@ class Worker(object):
         return True
 
     def get_weights(self):
-        param_dict = {}
-        for name, param in self.model.named_parameters():
-            param_dict[name] = param
-        return param_dict
+        return dict(self.model.named_parameters())
 
     def get_gradients(self):
         grad_dict = {}
@@ -134,11 +128,13 @@ class PS(object):
         return True
 
     def apply_updates(self, *list_of_gradients):
-        assert(len(list_of_gradients) >= 1)
-        summed_gradient_dict = dict()
-        for name in self.params:
-            summed_gradient_dict[name] = \
-                np.stack([grads[name] for grads in list_of_gradients]).sum(axis=0)
+        assert list_of_gradients
+        summed_gradient_dict = {
+            name: np.stack([grads[name] for grads in list_of_gradients]).sum(
+                axis=0
+            )
+            for name in self.params
+        }
         self.optimizer.zero_grad()
         self._set_gradients(summed_gradient_dict)
         self.optimizer.step()
@@ -180,9 +176,11 @@ class PSStrategy(object):
         self.num_ps = num_ps
         self.num_worker = num_worker
         self.model = model
-        self.workers = [Worker.remote(model=self.model, batch_size=batch_size)
-                        for i in range(self.num_worker)]
-        self.servers = [PS.remote() for i in range(self.num_ps)]
+        self.workers = [
+            Worker.remote(model=self.model, batch_size=batch_size)
+            for _ in range(self.num_worker)
+        ]
+        self.servers = [PS.remote() for _ in range(self.num_ps)]
         self.assignments = None
 
         self.initialize()
@@ -196,7 +194,7 @@ class PSStrategy(object):
             min_ps_index = loads.index(min(loads))
             loads[min_ps_index] += var_size
             assignments[i] = min_ps_index
-        print("Load of each ps {}".format(loads))
+        print(f"Load of each ps {loads}")
         self.assignments = assignments
 
     def initialize(self):
@@ -220,7 +218,7 @@ class PSStrategy(object):
         # stitch parameters
         param_ids = [ps.get_params.remote() for ps in self.servers]
         # worker compute the grads
-        ps_grad_mappings = [list() for i in range(self.num_ps)]
+        ps_grad_mappings = [[] for _ in range(self.num_ps)]
         loss_vals = []
         for worker in self.workers:
             stitched_param_id = worker.stitch_parameters.remote(*param_ids)

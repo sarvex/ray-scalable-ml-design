@@ -32,7 +32,7 @@ class RayBenchmarkWorker:
         elif self.backend == 'cpu':
             t = torch.FloatTensor(num_floats).fill_(value)
         else:
-            raise ValueError('Unrecognized backend: {}'.format(self.backend))
+            raise ValueError(f'Unrecognized backend: {self.backend}')
         return t
 
     def put_object(self, value=1.0):
@@ -45,15 +45,13 @@ class RayBenchmarkWorker:
         # timing
         start = time.time()
         _ = ray.get(object_ids)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def get_objects_with_creation_time(self, object_ids):
         start = time.time()
         object_ids = ray.get(object_ids)
         _ = ray.get(object_ids)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     @ray.method(num_returns=2)
     def reduce_objects(self, object_ids):
@@ -75,12 +73,12 @@ class RayBenchmarkActorPool:
                  object_size,
                  backend='gpu'):
         self.actors = []
-        for world_rank in range(world_size):
-            self.actors.append(
-                RayBenchmarkWorker.remote(world_size,
-                                          world_rank,
-                                          object_size,
-                                          backend=backend))
+        self.actors.extend(
+            RayBenchmarkWorker.remote(
+                world_size, world_rank, object_size, backend=backend
+            )
+            for world_rank in range(world_size)
+        )
 
     def barrier(self):
         return [w.barrier.remote() for w in self.actors]
@@ -136,8 +134,10 @@ def ray_allreduce(world_size, object_size, backend):
     # actor_pool.barrier()
     reduction_id, duration_id = actor_pool[0].reduce_objects.remote(object_ids)
     results = [duration_id]
-    for i in range(1, len(actor_pool)):
-        results.append(actor_pool[i].get_objects_with_creation_time.remote([reduction_id]))
+    results.extend(
+        actor_pool[i].get_objects_with_creation_time.remote([reduction_id])
+        for i in range(1, len(actor_pool))
+    )
     durations = ray.get(results)
     del actor_pool
     return max(durations)

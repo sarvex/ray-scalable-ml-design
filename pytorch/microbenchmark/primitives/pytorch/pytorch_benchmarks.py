@@ -38,36 +38,32 @@ class PyTorchBenchmarkWorker:
 
     def create_tensor(self, value=1.0):
         num_floats = self.object_size // 4
-        if self.backend == 'nccl':
-            t = torch.cuda.FloatTensor(num_floats).fill_(value)
-        else:
-            t = torch.FloatTensor(num_floats).fill_(value)
-        return t
+        return (
+            torch.cuda.FloatTensor(num_floats).fill_(value)
+            if self.backend == 'nccl'
+            else torch.FloatTensor(num_floats).fill_(value)
+        )
 
     def broadcast(self, src_rank):
         start = time.time()
         torch.distributed.broadcast(self.message, src_rank)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def reduce(self, dst_rank):
         start = time.time()
         torch.distributed.reduce(self.message, dst_rank)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def allreduce(self):
         start = time.time()
         torch.distributed.all_reduce(self.message)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def allgather(self):
         recv = [self.create_tensor() for _ in range(self.world_size)]
         start = time.time()
         torch.distributed.all_gather(recv, self.message)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def gather(self, dst_rank):
         if self.world_rank == dst_rank:
@@ -76,21 +72,18 @@ class PyTorchBenchmarkWorker:
             recv = None
         start = time.time()
         torch.distributed.gather(self.message, recv, dst=dst_rank)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def send(self, dst_rank):
         start = time.time()
         torch.distributed.send(self.message, dst_rank)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
     def recv(self, src_rank):
         recv_buffer = self.create_tensor()
         start = time.time()
         torch.distributed.recv(recv_buffer, src_rank)
-        duration = time.time() - start
-        return duration
+        return time.time() - start
 
 
 class PyTorchBenchmarkWorkerPool:
@@ -99,11 +92,12 @@ class PyTorchBenchmarkWorkerPool:
                  object_size,
                  backend='nccl'):
         self.actors = []
-        for world_rank in range(world_size):
-            self.actors.append(PyTorchBenchmarkWorker.remote(world_size,
-                                                             world_rank,
-                                                             object_size,
-                                                             backend=backend))
+        self.actors.extend(
+            PyTorchBenchmarkWorker.remote(
+                world_size, world_rank, object_size, backend=backend
+            )
+            for world_rank in range(world_size)
+        )
 
     def put_objects(self):
         rets = [w.put_object.remote() for w in self.actors]

@@ -20,7 +20,7 @@ from filelock import FileLock
 class Worker(object):
     def __init__(self, model='resnet50'):
         self.model_type = model
-        print("=> creating model '{}'".format(model))
+        print(f"=> creating model '{model}'")
         self.model = torchmodels.__dict__[model]().cuda()
         self.criterion = nn.CrossEntropyLoss().cuda()
         self.train_loader = self.get_data_loader()
@@ -29,11 +29,8 @@ class Worker(object):
         return len(self.get_weights())
 
     def params_distribution(self):
-        distribution = []
         weights = self.get_weights()
-        for k, v in weights.items():
-            distribution.append(v.numel())
-        return distribution
+        return [v.numel() for k, v in weights.items()]
 
     def get_data_loader(self):
         """Safely downloads data. Returns training/validation set dataloader."""
@@ -73,7 +70,7 @@ class Worker(object):
         # this grad is ready to be called by apply_gradients in ParameterServer
         grad = self.get_gradients()
         num_shards = np.unique(np.array(assignments)).size
-        shards = [dict() for i in range(num_shards)]
+        shards = [{} for _ in range(num_shards)]
         for i, (k, v) in enumerate(grad.items()):
             shards[assignments[i]][k] = v
         return shards
@@ -81,15 +78,15 @@ class Worker(object):
     def split_parameters(self, assignments):
         params = self.get_weights()
         num_shards = np.unique(np.array(assignments)).size
-        shards = [dict() for i in range(num_shards)]
+        shards = [{} for _ in range(num_shards)]
         for i, (k, v) in enumerate(params.items()):
             shards[assignments[i]][k] = v
         return shards
 
     def stitch_parameters(self, split_params):
         # need to construct a weight dict
-        stitch_param = dict()
-        for i, param in enumerate(split_params):
+        stitch_param = {}
+        for param in split_params:
             for k, v in param.items():
                 stitch_param[k] = v
         return stitch_param
@@ -100,10 +97,7 @@ class Worker(object):
                 param.copy_(weights[name])
 
     def get_weights(self):
-        param_dict = {}
-        for name, param in self.model.named_parameters():
-            param_dict[name] = param
-        return param_dict
+        return dict(self.model.named_parameters())
 
     def get_gradients(self):
         grad_dict = {}
@@ -124,11 +118,12 @@ class PS(object):
     def apply_updates(self, list_of_gradients):
         assert(len(list_of_gradients) >= 1)
 
-        summed_gradient_dict = dict()
-        for name in self.params:
-            summed_gradient_dict[name] = \
-                np.stack([grads[name] for grads in list_of_gradients]).sum(axis=0)
-
+        summed_gradient_dict = {
+            name: np.stack([grads[name] for grads in list_of_gradients]).sum(
+                axis=0
+            )
+            for name in self.params
+        }
         self.optimizer.zero_grad()
         self.set_gradients(summed_gradient_dict)
         self.optimizer.step()
@@ -180,7 +175,7 @@ def round_robin_sharding(worker):
         loads[min_ps_index] += var_size
         assignments[i] = min_ps_index
 
-    print("Load of each ps {}".format(loads))
+    print(f"Load of each ps {loads}")
     return assignments
 test_worker = Worker()
 assignments = round_robin_sharding(test_worker)

@@ -7,7 +7,7 @@ from datetime import datetime
 
 def parse_csv(path):
     """Read in the way that dict[algorithm][world_size] --> list"""
-    results = dict()
+    results = {}
     with open(path) as csvfile:
         iterator = csv.reader(csvfile, delimiter=',')
         for row in iterator:
@@ -25,13 +25,12 @@ def read_data(setting, backend):
         assert backend == 'gpu'
         ray_path = 'multigpu/ray-microbenchmark-gpu.csv'
         pytorch_path = 'multigpu/pytorch-microbenchmark-nccl.csv'
+    elif backend == 'cpu':
+        ray_path = 'distributed/ray-microbenchmark-cpu.csv'
+        pytorch_path = 'distributed/pytorch-microbenchmark-gloo.csv'
     else:
-        if backend == 'cpu':
-            ray_path = 'distributed/ray-microbenchmark-cpu.csv'
-            pytorch_path = 'distributed/pytorch-microbenchmark-gloo.csv'
-        else:
-            ray_path = 'distributed/ray-microbenchmark-gpu.csv'
-            pytorch_path = 'distributed/pytorch-microbenchmark-nccl.csv'
+        ray_path = 'distributed/ray-microbenchmark-gpu.csv'
+        pytorch_path = 'distributed/pytorch-microbenchmark-nccl.csv'
     ray_data = parse_csv(ray_path)
     pytorch_data = parse_csv(pytorch_path)
     return ray_data, pytorch_data
@@ -68,10 +67,7 @@ def draw(ray, other, fig_name):
     ax.set_ylim(ymax=7, ymin=1)
     ax.set_yticks([1, 2, 3, 4, 5, 6])
     ax.set_yticklabels(['$10^1$', '$10^2$', '$10^3$', '$10^4$', '$10^5$', '$10^6$'])
-    if 'cpu' in fig_name:
-        other_name = 'gloo'
-    else:
-        other_name = 'nccl'
+    other_name = 'gloo' if 'cpu' in fig_name else 'nccl'
     ax.legend((rects[0][0], rects[1][0]), ('ray', other_name), loc='upper left', ncol=1, prop={'size':12})
     # set the grid lines to dotted
     ax.grid(True)
@@ -98,20 +94,6 @@ def draw(ray, other, fig_name):
 
     ax.set_title(fig_name, fontsize=12, weight='bold')
     plt.show()
-    #ax.text(rects12[0].get_x()+rects12[0].get_width()/2, rects12[0].get_y()+rects12[0].get_height() + 0.2, 'TF', ha='center', va='bottom', fontsize=9)
-    #ax.text(rects12[1].get_x()+rects12[1].get_width()/2, rects12[1].get_y()+rects12[1].get_height() + 0.2, 'TF-P-wf', ha='center', va='bottom', fontsize=9)
-    #ax.text(rects12[2].get_x()+rects12[2].get_width()/2, rects12[2].get_y()+rects12[2].get_height() + 0.2, 'TF-P', ha='center', va='bottom', fontsize=9)
-
-    #ax.text(rects22[0].get_x()+rects22[0].get_width()/2, rects22[0].get_y()+rects22[0].get_height() + 0.2, 'TF', ha='center', va='bottom', fontsize=9)
-    #ax.text(rects22[1].get_x()+rects22[1].get_width()/2, rects22[1].get_y()+rects22[1].get_height() + 0.2, 'TF-P-wf', ha='center', va='bottom', fontsize=9)
-    #ax.text(rects22[2].get_x()+rects22[2].get_width()/2, rects22[2].get_y()+rects22[2].get_height() + 0.2, 'TF-P', ha='center', va='bottom', fontsize=9)
-
-    #ax.text(rects32[0].get_x()+rects32[0].get_width()/2, rects32[0].get_y()+rects32[0].get_height() + 0.2, 'TF', ha='center', va='bottom', fontsize=9)
-    #ax.text(rects32[1].get_x()+rects32[1].get_width()/2, rects32[1].get_y()+rects32[1].get_height() + 0.2, 'TF-P-wf', ha='center', va='bottom', fontsize=9)
-    #ax.text(rects32[2].get_x()+rects32[2].get_width()/2, rects32[2].get_y()+rects32[2].get_height() + 0.2, 'TF-P', ha='center', va='bottom', fontsize=9)
-
-    #def autolabel(rectss):
-        # attach some text labels
     #    n = len(rectss)
     #    for j in range(len(rectss[0])):
     #      height = 0
@@ -129,7 +111,9 @@ def draw(ray, other, fig_name):
     #plt.show()
     save_dir = os.path.join('plots/', fig_name)
     # fig.savefig(save_dir + '.pdf', transparent = True, bbox_inches = 'tight', pad_inches = 0)
-    fig.savefig(save_dir + '.png', transparent = True, bbox_inches = 'tight', pad_inches = 0)
+    fig.savefig(
+        f'{save_dir}.png', transparent=True, bbox_inches='tight', pad_inches=0
+    )
 
 
 backends = ['cpu', 'gpu']
@@ -145,13 +129,9 @@ for setting in settings:
             algorithms = ['reduce', 'broadcast', 'allgather', 'allreduce']
         else:
             algorithms = ['reduce', 'gather', 'broadcast', 'allgather', 'allreduce', 'sendrecv']
-        if setting == 'multigpu':
-            world_sizes = [2]
-        else:
-            world_sizes = [2, 4, 8, 16]
-
+        world_sizes = [2] if setting == 'multigpu' else [2, 4, 8, 16]
         for algorithm in algorithms:
             for world_size in world_sizes:
-                fig_name = '{}-{}-{}-{}'.format(setting, backend, algorithm, world_size)
+                fig_name = f'{setting}-{backend}-{algorithm}-{world_size}'
                 draw(np.array(ray_data[algorithm][world_size]), np.array(pytorch_data[algorithm][world_size]), fig_name)
 

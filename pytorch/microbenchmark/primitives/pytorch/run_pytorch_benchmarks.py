@@ -24,7 +24,7 @@ def test_with_mean_std(repeat_times,
                        backend='nccl'):
     results = []
     for i in range(repeat_times):
-        print('Test case {}......'.format(i))
+        print(f'Test case {i}......')
         test_case = pytorch_benchmarks.__dict__[test_name]
         duration = test_case(world_size, object_size, backend)
         results.append(duration)
@@ -34,7 +34,7 @@ def test_with_mean_std(repeat_times,
 
 if __name__ == "__main__":
     ray.init(num_cpus=16, num_gpus=2)
-    test_name = 'pytorch_' + args.test_name
+    test_name = f'pytorch_{args.test_name}'
     assert test_name in pytorch_benchmarks.__dict__ or args.test_name == 'auto'
     if args.test_name != 'auto':
         assert args.world_size is not None and args.object_size is not None
@@ -44,8 +44,8 @@ if __name__ == "__main__":
         assert args.world_size is None and args.object_size is None
         backends = ['nccl', 'gloo']
         for backend in backends:
-            print("==== Testing backend {} ====".format(backend))
-            write_to = 'pytorch-microbenchmark-' + backend + '.csv'
+            print(f"==== Testing backend {backend} ====")
+            write_to = f'pytorch-microbenchmark-{backend}.csv'
             with open(write_to, "w") as f:
                 if backend == 'nccl':
                     algorithms = ['pytorch_broadcast', 'pytorch_reduce', 'pytorch_allreduce', 'pytorch_allgather']
@@ -53,7 +53,7 @@ if __name__ == "__main__":
                     algorithms = ['pytorch_broadcast', 'pytorch_gather', 'pytorch_reduce', 'pytorch_allreduce',
                                   'pytorch_allgather', 'pytorch_sendrecv']
                 else:
-                    raise ValueError('Cannot recognize the backend: {}'.format(args.backend))
+                    raise ValueError(f'Cannot recognize the backend: {args.backend}')
                 world_sizes = [2]
                 object_sizes = [2 ** 10, 2 ** 15, 2 ** 20, 2 ** 25, 2 ** 30]
                 for algorithm in algorithms:
